@@ -1,0 +1,31 @@
+{
+  "name": "體成分儀表板",
+  "short_name": "體成分",
+  "description": "上傳量測紀錄檔，檢視體成分與每日趨勢分析。資料僅在瀏覽器本機解析。",
+  "lang": "zh-Hant",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#faf8f3",
+  "theme_color": "#2f6f4e",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
