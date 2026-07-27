@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>體成分儀表板</title>
+<style>
+  *{box-sizing:border-box;}
+  body{margin:0;min-height:100vh;background:#faf8f3;color:#2b2822;
+    font-family:'Noto Sans TC','PingFang TC','Microsoft JhengHei',system-ui,sans-serif;
+    display:flex;align-items:center;justify-content:center;padding:40px 20px;}
+  .wrap{width:100%;max-width:760px;}
+  h1{font-size:26px;font-weight:800;margin:0 0 6px;letter-spacing:.5px;}
+  .lead{font-size:14px;color:#8a8578;margin:0 0 28px;line-height:1.7;}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;}
+  @media(max-width:640px){.grid{grid-template-columns:1fr;}}
+  .card{display:block;text-decoration:none;color:inherit;background:#fff;
+    border:1px solid #e0dacf;border-top:3px solid;border-radius:12px;padding:22px 20px 20px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04);transition:transform .15s ease,box-shadow .15s ease;}
+  .card:hover{transform:translateY(-3px);box-shadow:0 6px 18px rgba(0,0,0,.09);}
+  .card.a{border-top-color:#4E7A63;}
+  .card.b{border-top-color:#3D6E8C;}
+  .card h2{font-size:17px;font-weight:700;margin:0 0 8px;}
+  .card p{font-size:13px;color:#6f6a5e;margin:0 0 14px;line-height:1.65;}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;}
+  .tag{font-size:11px;color:#8a8578;background:#faf8f3;border:1px solid #eee7db;
+    border-radius:20px;padding:3px 9px;}
+  .go{margin-top:14px;font-size:12.5px;font-weight:700;color:#2b2822;}
+  .model{margin-top:12px;padding-top:10px;border-top:1px solid #f0ece3;
+    font-size:11px;color:#a89f8d;display:flex;align-items:center;gap:6px;}
+  .model b{font-weight:700;color:#6f6a5e;}
+  footer{margin-top:26px;font-size:11.5px;color:#b0a894;text-align:center;line-height:1.7;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>體成分儀表板</h1>
+  <p class="lead">上傳量測紀錄檔，檢視體成分與每日趨勢分析。資料僅在瀏覽器本機解析，不會上傳至伺服器。</p>
+
+  <div class="grid">
+    <a class="card b" href="./daily/">
+      <h2>每日量測趨勢</h2>
+      <p>體重、體脂肪、內臟脂肪、皮下脂肪與骨骼筋的逐日走勢與回歸趨勢線。</p>
+      <div class="tags">
+        <span class="tag">趨勢回歸</span>
+        <span class="tag">% / kg 切換</span>
+        <span class="tag">區間篩選</span>
+      </div>
+      <div class="model">開發模型 <b>Claude Opus 4.8</b></div>
+      <div class="go">開啟 →</div>
+    </a>
+
+    <a class="card a" href="./inbody.html">
+      <h2>InBody 體成分追蹤</h2>
+      <p>完整體成分報告：節段分析、肌肉脂肪、肥胖分析與各項指標區間評估。</p>
+      <div class="tags">
+        <span class="tag">節段分析</span>
+        <span class="tag">區間評估</span>
+        <span class="tag">歷程表格</span>
+      </div>
+      <div class="model">開發模型 <b>Claude Sonnet 5</b></div>
+      <div class="go">開啟 →</div>
+    </a>
+  </div>
+
+  <footer>支援 Excel（.xlsx / .xls）與 CSV 檔案上傳</footer>
+</div>
+</body>
+</html>

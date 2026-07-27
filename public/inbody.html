@@ -1,0 +1,1246 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<title>InBody 體成分追蹤 · 儀表板</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#EEF1EE; --paper:#FFFFFF; --ink:#1C2521; --ink-soft:#5A655E; --grid:#DDE2DA;
+    --safe:#4E7A63; --safe-bg:#D8E5DC;
+    --athletic:#3D6E8C; --athletic-bg:#DCE6EC;
+    --caution:#B8863C; --caution-bg:#F0E6CE;
+    --risk:#A8553D; --risk-bg:#EFDCD5;
+    --A:#4E7A63; --B:#3D6E8C; --C:#B8863C; --D:#3F7D5C; --E:#A8553D; --F:#6B5B8C; --G:#4A5A8C;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:'IBM Plex Sans','Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif;
+    padding:0 0 60px;}
+  .mono{font-family:'IBM Plex Mono',monospace;}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px;}
+
+  .topbar{background:var(--ink);color:#F3F5F1;padding:18px 0;position:sticky;top:0;z-index:10;}
+  .topbar .wrap{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;}
+  .topbar h1{font-size:18px;margin:0;font-weight:700;}
+  .home-link{display:inline-block;font-family:'IBM Plex Mono',monospace;font-size:11px;
+    color:#B9C2BC;text-decoration:none;margin-bottom:5px;}
+  .home-link:hover{color:#fff;}
+  .topbar .sub{font-size:11.5px;color:#B9C2BC;font-family:'IBM Plex Mono',monospace;}
+  .upload-area{display:flex;flex-direction:column;align-items:flex-end;gap:4px;}
+  .upload-btn{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:#F3F5F1;
+    background:#3A443E;border:1px solid #4C584F;padding:6px 12px;border-radius:20px;
+    cursor:pointer;white-space:nowrap;}
+  .upload-btn:hover{background:#4C584F;}
+  .upload-status{font-size:10.5px;color:#B9C2BC;font-family:'IBM Plex Mono',monospace;max-width:220px;text-align:right;}
+  .upload-status.error{color:#E39B8A;}
+  .upload-status.success{color:#9FCBB0;}
+  nav.jump{display:flex;gap:4px;flex-wrap:wrap;padding:9px 0 0;}
+  nav.jump a{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#B9C2BC;text-decoration:none;
+    padding:4px 9px;border:1px solid #3A443E;border-radius:20px;}
+  nav.jump a:hover{color:#fff;border-color:#6C7A70;}
+
+  .inspector-bar{background:var(--paper);border-bottom:1px solid var(--grid);position:sticky;z-index:9;
+    display:none;
+    box-shadow:0 2px 6px rgba(28,37,33,.05);}
+  .inspector-inner{padding:9px 20px 10px;}
+  .ins-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;}
+  .ins-top .ins-label{font-size:11px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;}
+  .ins-top .ins-date{font-size:16px;font-weight:700;font-family:'IBM Plex Mono',monospace;}
+  .ins-top .ins-badge{font-size:10.5px;font-family:'IBM Plex Mono',monospace;padding:2px 8px;border-radius:20px;background:var(--safe-bg);color:var(--safe);}
+  .ins-top .ins-badge.live{background:var(--risk-bg);color:var(--risk);}
+  .ins-top .ins-hint{margin-left:auto;font-size:10.5px;color:var(--ink-soft);}
+  .ins-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+  @media(max-width:820px){.ins-grid{grid-template-columns:repeat(3,1fr);}}
+  .ins-item{background:var(--bg);border-radius:6px;padding:6px 9px;height:58px;overflow:hidden;}
+  .ins-item-label{font-size:10px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ins-item-val{font-family:'IBM Plex Mono',monospace;font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ins-item-val .ins-unit{font-size:9.5px;color:var(--ink-soft);font-weight:400;margin-left:2px;}
+  .ins-delta{font-family:'IBM Plex Mono',monospace;font-size:10px;height:13px;line-height:13px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ins-delta.up{color:var(--safe);} .ins-delta.down{color:var(--risk);}
+
+  .ins-badge.locked{background:#E4DFEC;color:#6B5B8C;}
+
+  .ins-timeline{position:relative;display:flex;align-items:center;justify-content:space-between;
+    height:34px;margin:2px 0 10px;padding:0 4px;}
+  .ins-timeline::before{content:'';position:absolute;left:14px;right:14px;top:9px;height:1px;background:var(--grid);}
+  .ins-dot-btn{position:relative;background:none;border:none;padding:0;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:5px;flex:1;font-family:inherit;}
+  .ins-dot{width:9px;height:9px;border-radius:50%;background:var(--paper);border:2px solid var(--grid);
+    transition:all .12s;}
+  .ins-dot-label{font-size:9.5px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;white-space:nowrap;}
+  .ins-dot-btn:hover .ins-dot{border-color:var(--risk);transform:scale(1.15);}
+  .ins-dot-btn.active .ins-dot{background:var(--risk);border-color:var(--risk);transform:scale(1.3);}
+  .ins-dot-btn.active .ins-dot-label{color:var(--ink);font-weight:700;}
+  .ins-dot-btn.locked .ins-dot{background:#6B5B8C;border-color:#6B5B8C;box-shadow:0 0 0 3px #E4DFEC;}
+  .ins-dot-btn.locked .ins-dot-label{color:#6B5B8C;font-weight:700;}
+
+  header.hero{padding:22px 0 6px;scroll-margin-top:170px;}
+  .eyebrow{font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 4px;}
+  .rangeline{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink-soft);margin:6px 0 0;}
+  .rangeline b{color:var(--ink);}
+  .callout{background:var(--caution-bg);border:1px solid #DFC28B;border-radius:8px;padding:14px 18px;margin:16px 0;font-size:13px;color:#6B4F1F;}
+
+  /* ---- snapshot (IMG_9070 / IMG_9073 style) ---- */
+  section.snapshot{margin-top:22px;scroll-margin-top:170px;}
+  .snap-note{font-size:12px;color:var(--ink-soft);margin:0 0 12px;}
+  .snap-card{background:var(--paper);border:1px solid var(--grid);border-radius:10px;padding:18px 18px 14px;margin-bottom:14px;}
+  .snap-card h3{font-size:14px;margin:0 0 4px;}
+  .snap-card p.sd{font-size:11.5px;color:var(--ink-soft);margin:0 0 12px;}
+
+  .legend{display:flex;gap:16px;font-size:11.5px;color:var(--ink-soft);margin-bottom:14px;}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px;}
+
+  .healthrow{display:flex;align-items:center;gap:24px;flex-wrap:wrap;margin-bottom:6px;}
+  .health-big{display:flex;align-items:baseline;gap:6px;}
+  .health-big .num{font-family:'IBM Plex Mono',monospace;font-size:42px;font-weight:700;color:var(--safe);}
+  .health-big .max{font-size:16px;color:var(--ink-soft);}
+  .health-delta{font-family:'IBM Plex Mono',monospace;font-size:12px;}
+
+  .barsrow{display:flex;gap:22px;justify-content:space-around;flex-wrap:wrap;}
+  .zbar{width:118px;text-align:center;}
+  .zbar-value{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:700;}
+  .zbar-value .u{font-size:10.5px;color:var(--ink-soft);font-weight:400;}
+  .zbar-grade{display:inline-block;font-size:10.5px;padding:1px 8px;border-radius:20px;margin:3px 0 8px;font-weight:600;}
+  .zbar-track{position:relative;height:190px;border-radius:6px;overflow:hidden;border:1px solid var(--grid);background:var(--bg);}
+  .zbar-band{position:absolute;left:0;right:0;}
+  .zbar-band-label{position:absolute;left:0;right:0;top:2px;font-size:9px;color:rgba(28,37,33,.55);text-align:center;pointer-events:none;}
+  .zbar-marker{position:absolute;left:-2px;right:-2px;height:2px;background:var(--ink);box-shadow:0 0 0 2px rgba(255,255,255,.7);}
+  .zbar-marker::after{content:'▶';position:absolute;left:-11px;top:-7px;font-size:11px;color:var(--ink);}
+  .zbar-title{font-size:11px;color:var(--ink-soft);margin-top:6px;}
+  .zbar-sub{font-size:10px;color:var(--ink-soft);margin-top:2px;}
+
+  /* ---- collapsible detail sections ---- */
+  details.section{margin-top:16px;scroll-margin-top:170px;background:var(--paper);border:1px solid var(--grid);border-radius:8px;padding:4px 16px 4px;}
+  details.section[open]{padding-bottom:16px;}
+  details.section summary{cursor:pointer;list-style:none;padding:14px 0;display:flex;align-items:center;gap:10px;}
+  details.section summary::-webkit-details-marker{display:none;}
+  details.section summary::before{content:'▸';font-size:12px;color:var(--ink-soft);transition:transform .15s;}
+  details.section[open] summary::before{transform:rotate(90deg);}
+  details.section .tag{font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:700;color:#fff;padding:3px 9px;border-radius:4px;}
+  details.section summary h2{font-size:15px;margin:0;display:inline;}
+  details.section summary .note{font-size:11.5px;color:var(--ink-soft);margin-left:auto;}
+
+  .herogrid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:6px;}
+  @media(max-width:820px){.herogrid{grid-template-columns:1fr;}}
+  .herocard{background:var(--bg);border:1px solid var(--grid);border-radius:8px;padding:14px 16px 6px;}
+  .herocard h3{font-size:13.5px;margin:0 0 6px;}
+  .herocard canvas{max-height:190px;}
+
+  .minigrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;}
+  @media(max-width:980px){.minigrid{grid-template-columns:repeat(3,1fr);}}
+  @media(max-width:680px){.minigrid{grid-template-columns:repeat(2,1fr);}}
+  .card{background:var(--bg);border:1px solid var(--grid);border-radius:8px;padding:12px 14px 6px;}
+  .card .label{font-size:11.5px;color:var(--ink-soft);margin-bottom:5px;height:28px;line-height:14px;}
+  .card .valrow{display:flex;align-items:baseline;gap:5px;}
+  .card .val{font-family:'IBM Plex Mono',monospace;font-size:19px;font-weight:700;}
+  .card .unit{font-size:11px;color:var(--ink-soft);}
+  .card .delta{margin-left:auto;font-family:'IBM Plex Mono',monospace;font-size:10.5px;padding:1px 6px;border-radius:20px;font-weight:600;}
+  .card .card-date{font-size:9.5px;color:var(--ink-soft);font-family:'IBM Plex Mono',monospace;margin-top:2px;}
+  .card canvas{margin-top:2px;max-height:52px;}
+  .chart-box{position:relative;width:100%;overflow:hidden;}
+  .chart-box canvas{max-height:none !important;}
+
+  .bigcombo{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px;}
+  @media(max-width:820px){.bigcombo{grid-template-columns:1fr;}}
+  .bigcombo .card{padding:16px 18px 8px;background:var(--bg);}
+  .bigcombo canvas{max-height:200px;}
+  .bigcombo h3{font-size:13.5px;margin:0 0 2px;}
+  .bigcombo p.desc{font-size:11.5px;color:var(--ink-soft);margin:0 0 6px;}
+
+  .chiptable{width:100%;border-collapse:collapse;font-size:12px;background:var(--bg);border:1px solid var(--grid);border-radius:8px;overflow:hidden;margin-top:6px;}
+  .chiptable th,.chiptable td{padding:8px 10px;border-bottom:1px solid var(--grid);text-align:center;}
+  .chiptable th{background:#F5F6F3;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;}
+  .chiptable td:first-child, .chiptable th:first-child{text-align:left;font-family:'IBM Plex Mono',monospace;}
+  .chip{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+  .chip.ok{background:var(--safe-bg);color:var(--safe);}
+  .chip.mid{background:var(--caution-bg);color:var(--caution);}
+  .chip.warn{background:var(--risk-bg);color:var(--risk);}
+  .tablenote{font-size:11.5px;color:var(--ink-soft);margin:8px 0 0;}
+
+  .tablewrap{margin-top:10px;background:var(--bg);border:1px solid var(--grid);border-radius:8px;overflow-x:auto;}
+  table.full{width:100%;border-collapse:collapse;font-family:'IBM Plex Mono',monospace;font-size:11px;}
+  table.full th,table.full td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--grid);}
+  table.full th:first-child,table.full td:first-child{text-align:left;}
+  table.full thead th{color:var(--ink-soft);font-weight:600;font-size:10px;text-transform:uppercase;}
+  table.full tbody tr:last-child td{font-weight:700;background:var(--safe-bg);}
+
+  footer{margin-top:36px;font-size:11px;color:var(--ink-soft);text-align:center;}
+
+  .empty-state{text-align:center;padding:90px 20px;}
+  .empty-state .empty-icon{font-size:44px;margin-bottom:16px;opacity:.6;}
+  .empty-state h2{font-size:19px;margin:0 0 10px;}
+  .empty-state p{font-size:13.5px;color:var(--ink-soft);margin:0 auto 6px;max-width:480px;line-height:1.6;}
+  .empty-state .empty-hint{font-size:12px;max-width:520px;}
+  #mainContent{display:none;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <div>
+      <a class="home-link" href="/">← 返回首頁</a>
+      <h1>InBody 儀表板</h1>
+      <div class="sub" id="topbarSub">尚未上傳資料</div>
+    </div>
+    <div class="upload-area">
+      <label class="upload-btn" for="fileInput">上傳新數據 (CSV/Excel)</label>
+      <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+      <div class="upload-status" id="uploadStatus"></div>
+    </div>
+  </div>
+  <div class="wrap">
+    <nav class="jump">
+      <a href="#snapshot">本次重點</a>
+      <a href="#trend">長期趨勢</a>
+      <a href="#secA">體位詳細</a>
+      <a href="#secB">水分/蛋白/礦物</a>
+      <a href="#secC">肥胖與代謝</a>
+      <a href="#secD">節段肌肉</a>
+      <a href="#secE">節段脂肪</a>
+      <a href="#secF">體重管理目標</a>
+      <a href="#secG">肌力與肌肉品質</a>
+      <a href="#secH">分級判讀時間軸</a>
+      <a href="#secTable">完整數據表</a>
+    </nav>
+  </div>
+</div>
+
+<div class="inspector-bar" id="inspectorBar">
+  <div class="wrap inspector-inner">
+    <div class="ins-top">
+      <span class="ins-label">選取日期</span>
+      <span class="ins-date" id="insDate">--</span>
+      <span class="ins-badge" id="insBadge">最新一筆</span>
+      <span class="ins-hint">點擊圓點可鎖定該日期，再點一次取消；滑鼠移到下方圖表可快速預覽</span>
+    </div>
+    <div class="ins-timeline" id="insTimeline"></div>
+    <div class="ins-grid" id="insGrid"></div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="empty-state" id="emptyState">
+    <div class="empty-icon">📊</div>
+    <h2>尚未載入任何資料</h2>
+    <p>點右上角「上傳新數據 (CSV / Excel)」開始使用這個儀表板。</p>
+    <p class="empty-hint">檔案需與 InBody App 匯出的欄位格式相同（測量日期、體重(kg)、骨骼肌量(kg)、體脂肪率(%)、目標體重(kg)⋯等欄位名稱），上傳後會自動依日期排序並產生所有圖表。</p>
+  </div>
+
+  <div id="mainContent">
+
+  <header class="hero" id="hero">
+    <p class="eyebrow">體成分測量紀錄 · InBody</p>
+    <p class="rangeline" id="rangeline">尚未上傳資料</p>
+  </header>
+
+  <div class="callout" id="callout">
+    上傳 InBody 匯出的 CSV / Excel 後，這裡會依實際紀錄產生體成分變化摘要。
+  </div>
+
+  <!-- ============ 本次測量重點（IMG_9070 / IMG_9073 風格） ============ -->
+  <section class="snapshot" id="snapshot">
+    <div class="snap-card">
+      <h3>健康分數</h3>
+      <p class="sd">InBody 綜合評分，隨上方選取日期更新</p>
+      <div class="healthrow">
+        <div class="health-big"><span class="num" id="healthNum">--</span><span class="max">/ 100</span></div>
+        <span class="health-delta" id="healthDelta"></span>
+      </div>
+    </div>
+
+    <div class="snap-card">
+      <h3>肥胖分析</h3>
+      <p class="sd">體脂肪率、BMI、VFA 分級採您提供的女性標準區間</p>
+      <div class="legend">
+        <span><i style="background:var(--safe)"></i>標準</span>
+        <span><i style="background:var(--athletic)"></i>運動（優於標準）</span>
+        <span><i style="background:var(--caution)"></i>需留意</span>
+        <span><i style="background:var(--risk)"></i>過高 / 肥胖</span>
+      </div>
+      <div class="barsrow">
+        <div class="zbar" id="bar-bodyfat">
+          <div class="zbar-value" id="bar-bodyfat_value">--</div>
+          <div class="zbar-grade" id="bar-bodyfat_grade">--</div>
+          <div class="zbar-track" id="bar-bodyfat_track"></div>
+          <div class="zbar-title">體脂肪率 (%)</div>
+          <div class="zbar-sub">過低&lt;10 / 運動10-22 / 標準22-34 / 過高34-40 / 肥胖&gt;40</div>
+        </div>
+        <div class="zbar" id="bar-bmi">
+          <div class="zbar-value" id="bar-bmi_value">--</div>
+          <div class="zbar-grade" id="bar-bmi_grade">--</div>
+          <div class="zbar-track" id="bar-bmi_track"></div>
+          <div class="zbar-title">BMI (kg/m²)</div>
+          <div class="zbar-sub">過低&lt;18.5 / 標準18.5-24.5 / 過高24.5-29.9 / 肥胖&gt;29.9</div>
+        </div>
+        <div class="zbar" id="bar-vfa">
+          <div class="zbar-value" id="bar-vfa_value">--</div>
+          <div class="zbar-grade" id="bar-vfa_grade">--</div>
+          <div class="zbar-track" id="bar-vfa_track"></div>
+          <div class="zbar-title">VFA</div>
+          <div class="zbar-sub">低≤10 / 中等11-15 / 高&gt;15</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="snap-card">
+      <h3>肌肉－脂肪分析</h3>
+      <p class="sd">以 InBody 該次報告的「目標值」換算成佔標準的百分比定位；三項指標的標準區間寬窄不同（體重 85–113%／骨骼肌 90–110%／體脂肪 80–120%），長條上顯示的數字是實際公斤數</p>
+      <div class="legend">
+        <span><i style="background:var(--caution)"></i>過低</span>
+        <span><i style="background:var(--safe)"></i>標準</span>
+        <span><i style="background:var(--risk)"></i>過高</span>
+      </div>
+      <div class="barsrow">
+        <div class="zbar" id="bar-weight">
+          <div class="zbar-value" id="bar-weight_value">--</div>
+          <div class="zbar-grade" id="bar-weight_grade">--</div>
+          <div class="zbar-track" id="bar-weight_track"></div>
+          <div class="zbar-title">體重</div>
+          <div class="zbar-sub">標準 85–113%</div>
+          <div class="zbar-sub" id="bar-weight_sub"></div>
+        </div>
+        <div class="zbar" id="bar-smm">
+          <div class="zbar-value" id="bar-smm_value">--</div>
+          <div class="zbar-grade" id="bar-smm_grade">--</div>
+          <div class="zbar-track" id="bar-smm_track"></div>
+          <div class="zbar-title">骨骼肌量</div>
+          <div class="zbar-sub">標準 90–110%</div>
+          <div class="zbar-sub" id="bar-smm_sub"></div>
+        </div>
+        <div class="zbar" id="bar-fat">
+          <div class="zbar-value" id="bar-fat_value">--</div>
+          <div class="zbar-grade" id="bar-fat_grade">--</div>
+          <div class="zbar-track" id="bar-fat_track"></div>
+          <div class="zbar-title">體脂肪量</div>
+          <div class="zbar-sub">標準 80–120%</div>
+          <div class="zbar-sub" id="bar-fat_sub"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 長期趨勢（精簡為兩張核心圖） ============ -->
+  <section class="snapshot" id="trend">
+    <div class="snap-card">
+      <h3>長期趨勢</h3>
+      <p class="sd">完整原始數據與更多指標收納在下方各區塊（點擊展開）</p>
+      <div class="herogrid">
+        <div class="herocard">
+          <h3>體重 vs 體脂率</h3>
+          <div class="chart-box" style="height:190px;"><canvas id="heroWeight"></canvas></div>
+        </div>
+        <div class="herocard">
+          <h3>脂肪量 vs 骨骼肌量</h3>
+          <div class="chart-box" style="height:190px;"><canvas id="heroFatMuscle"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 收合式詳細區塊 ============ -->
+  <details class="section" id="secA">
+    <summary><span class="tag" style="background:var(--A)">A</span><h2>體位總覽（詳細趨勢）</h2><span class="note">體重、BMI、體脂、肌肉、健康分數</span></summary>
+    <div class="minigrid" data-group="A"></div>
+  </details>
+
+  <details class="section" id="secB">
+    <summary><span class="tag" style="background:var(--B)">B</span><h2>水分・蛋白質・礦物質</h2><span class="note">ECW/TBW 為計算值，比例越高代表水腫傾向越高</span></summary>
+    <div class="minigrid" data-group="B"></div>
+  </details>
+
+  <details class="section" id="secC">
+    <summary><span class="tag" style="background:var(--C)">C</span><h2>肥胖與代謝分析</h2><span class="note">VFA、FMI、SMI、BMR、TEE</span></summary>
+    <div class="minigrid" data-group="C"></div>
+  </details>
+
+  <details class="section" id="secD">
+    <summary><span class="tag" style="background:var(--D)">D</span><h2>節段肌肉分析（瘦肉量）</h2><span class="note" id="segLeanNote"></span></summary>
+    <div class="minigrid" data-group="D"></div>
+    <div class="card" style="margin-top:10px;padding:16px 18px 8px;background:var(--bg);">
+      <h3 style="font-size:13.5px;margin:0 0 2px;">分節瘦肉量對比（可切換日期）</h3>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:0 0 8px;">軀幹單獨用自己的歷史最小-最大值換算成 15-100；左右上肢、左右下肢則左右各自共用同一把尺，所以同樣公斤數的左右手會落在同一位置，方便看左右對稱性。即使變化量很小也能看出趨勢，但軸/組之間不能直接比較絕對大小，實際公斤數請看提示框。預設只顯示最舊與最新兩筆，點上方圖例可切換顯示/隱藏任一日期</p>
+      <div class="chart-box" style="height:340px;"><canvas id="segLeanBar"></canvas></div>
+    </div>
+  </details>
+
+  <details class="section" id="secE">
+    <summary><span class="tag" style="background:var(--E)">E</span><h2>節段脂肪分析</h2><span class="note" id="segFatNote"></span></summary>
+    <div class="minigrid" data-group="E"></div>
+    <div class="card" style="margin-top:10px;padding:16px 18px 8px;background:var(--bg);">
+      <h3 style="font-size:13.5px;margin:0 0 2px;">分節脂肪量對比（可切換日期）</h3>
+      <p style="font-size:11.5px;color:var(--ink-soft);margin:0 0 8px;">軀幹單獨換算，左右上肢/左右下肢分別共用同一把尺（方便看左右對稱性），同上；預設只顯示最舊與最新兩筆，點圖例可切換其他日期；實際公斤數請看提示框</p>
+      <div class="chart-box" style="height:340px;"><canvas id="segFatBar"></canvas></div>
+    </div>
+  </details>
+
+  <details class="section" id="secF">
+    <summary><span class="tag" style="background:var(--F)">F</span><h2>體重管理目標</h2><span class="note">體重/脂肪控制為負值代表建議減少量</span></summary>
+    <div class="minigrid" data-group="F"></div>
+  </details>
+
+  <details class="section" id="secG">
+    <summary><span class="tag" style="background:var(--G)">G</span><h2>肌力與肌肉品質</h2><span class="note">握力為建議範圍，非單一實測值</span></summary>
+    <div class="minigrid" data-group="G"></div>
+    <div class="bigcombo">
+      <div class="card"><h3>左手握力建議範圍 (kgf)</h3><p class="desc">帶狀區間 = 建議下限～上限</p><div class="chart-box" style="height:200px;"><canvas id="gripL"></canvas></div></div>
+      <div class="card"><h3>右手握力建議範圍 (kgf)</h3><p class="desc">帶狀區間 = 建議下限～上限</p><div class="chart-box" style="height:200px;"><canvas id="gripR"></canvas></div></div>
+    </div>
+  </details>
+
+  <details class="section" id="secH">
+    <summary><span class="tag" style="background:#5A655E">H</span><h2>分級判讀時間軸</h2><span class="note">每次測量的等級判定（列＝日期／欄＝指標）</span></summary>
+    <table class="chiptable" id="chipTable"></table>
+    <p class="tablenote">綠＝標準／良好，黃褐＝中等或稍高，紅棕＝過高或需留意。</p>
+  </details>
+
+  <details class="section" id="secTable">
+    <summary><span class="tag" style="background:#1C2521">#</span><h2>完整數據表</h2><span class="note">所有測量原始數值</span></summary>
+    <div class="tablewrap"><table class="full" id="fullTable"></table></div>
+  </details>
+
+  <footer>資料來源：使用者上傳之 InBody 匯出紀錄。此頁面純前端渲染，不會上傳或儲存資料。<br>由 Claude Sonnet 5 協助開發。</footer>
+
+  </div>
+</div>
+
+<script>
+function computeDerived(rowsArr){
+  rowsArr.forEach(r=>{
+    r.ecwRatio = (r.ecwL!=null && r.tbw) ? +(r.ecwL/r.tbw*100).toFixed(1) : null;
+    r.targetSmm = (r.smm!=null && r.muscleControl!=null) ? +(r.smm + r.muscleControl).toFixed(2) : null;
+    r.targetFat = (r.fatMass!=null && r.fatControl!=null) ? +(r.fatMass + r.fatControl).toFixed(2) : null;
+    r.weightPct = (r.weight!=null && r.targetWeight) ? +(r.weight/r.targetWeight*100).toFixed(1) : null;
+    r.smmPct = (r.smm!=null && r.targetSmm) ? +(r.smm/r.targetSmm*100).toFixed(1) : null;
+    r.fatPct = (r.fatMass!=null && r.targetFat) ? +(r.fatMass/r.targetFat*100).toFixed(1) : null;
+  });
+  return rowsArr;
+}
+// 資料一律由使用者上傳的檔案解析取得（見 parseWorkbook / COLUMN_MAP），不內嵌任何量測紀錄
+let raw = [];
+
+// 依實際上傳資料產生首段摘要；缺欄位時自動略過該句，不硬編任何數值
+function buildCallout(first, last, rows){
+  const parts = [];
+  const diff = (k) => (first[k]!=null && last[k]!=null) ? +(last[k]-first[k]).toFixed(1) : null;
+  const sign = (v) => (v>0?'＋':'－') + Math.abs(v);
+  const smmD = diff('smm'), muscleD = diff('muscleMass'), fatD = diff('fatMass'), wD = diff('weight');
+  if(smmD!==null) parts.push(`骨骼肌量從 ${first.smm}kg 變為 ${last.smm}kg（${sign(smmD)}kg）`);
+  if(muscleD!==null) parts.push(`肌肉量從 ${first.muscleMass}kg 變為 ${last.muscleMass}kg（${sign(muscleD)}kg）`);
+  if(fatD!==null) parts.push(`體脂肪從 ${first.fatMass}kg 變為 ${last.fatMass}kg（${sign(fatD)}kg）`);
+  if(wD!==null) parts.push(`體重從 ${first.weight}kg 變為 ${last.weight}kg（${sign(wD)}kg）`);
+  if(!parts.length) return `已載入 ${rows.length} 筆紀錄。`;
+  let s = parts.join('；') + '。';
+  if(smmD!==null && smmD < 0) s += ' 骨骼肌量呈下降趨勢，建議留意訓練強度與蛋白質攝取。';
+  return s;
+}
+
+let labels = raw.map(r=>r.date.slice(2).replace(/-/g,'/'));
+let first = raw[0], last = raw[raw.length-1];
+const ink='#1C2521', inkSoft='#5A655E', grid='#DDE2DA';
+const COL_SAFE='#4E7A63', COL_CAUTION='#B8863C', COL_RISK='#A8553D', COL_ATHLETIC='#3D6E8C';
+
+Chart.defaults.font.family = "'IBM Plex Mono', monospace";
+Chart.defaults.font.size = 10;
+Chart.defaults.color = inkSoft;
+
+function fmt(v){
+  if(v===null || v===undefined) return '—';
+  if(typeof v === 'string') return v;
+  return Number.isInteger(v) ? v : v.toFixed(1);
+}
+function chipClass(v){
+  if(['標準','低','良好','運動'].includes(v)) return 'ok';
+  if(['中等','脂肪偏高','過低'].includes(v)) return 'mid';
+  return 'warn';
+}
+
+// ================= 跨圖表連動（十字游標） =================
+const State = { index: raw.length-1, hover:false, locked:false };
+const chartRegistry = [];
+const allCharts = [];
+
+function syncAll(){
+  chartRegistry.forEach(c=>c.update('none'));
+  updateInspector();
+  updateSnapshot();
+  updateTimeline();
+  updateMiniValues();
+}
+
+const crosshairPlugin = {
+  id:'crosshair',
+  afterEvent(chart, args){
+    const opt = chart.config.options.plugins && chart.config.options.plugins.crosshair;
+    if(!opt || !opt.enabled) return;
+    if(State.locked) return;
+    const e = args.event;
+    const xScale = chart.scales.x;
+    if(!xScale) return;
+    if(e.type==='mousemove' || e.type==='touchmove' || e.type==='click'){
+      const val = xScale.getValueForPixel(e.x);
+      let idx = Math.round(val);
+      idx = Math.max(0, Math.min(raw.length-1, idx));
+      if(idx!==State.index || !State.hover){
+        State.index = idx; State.hover = true; syncAll();
+      }
+    } else if(e.type==='mouseout'){
+      State.hover = false; State.index = raw.length-1; syncAll();
+    }
+  },
+  afterDatasetsDraw(chart){
+    const opt = chart.config.options.plugins && chart.config.options.plugins.crosshair;
+    if(!opt || !opt.enabled) return;
+    if(State.index==null) return;
+    const xScale = chart.scales.x;
+    if(!xScale) return;
+    const x = xScale.getPixelForValue(State.index);
+    const {ctx, chartArea} = chart;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, chartArea.top);
+    ctx.lineTo(x, chartArea.bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = State.hover ? 'rgba(168,85,61,0.55)' : 'rgba(28,37,33,0.18)';
+    ctx.setLineDash(State.hover ? [] : [3,3]);
+    ctx.stroke();
+    ctx.restore();
+    chart.data.datasets.forEach((ds, dsIndex)=>{
+      const meta = chart.getDatasetMeta(dsIndex);
+      if(meta.hidden) return;
+      const point = meta.data[State.index];
+      if(point){
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 3.5, 0, Math.PI*2);
+        ctx.fillStyle = ds.borderColor || ink;
+        ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+        ctx.restore();
+      }
+    });
+  }
+};
+Chart.register(crosshairPlugin);
+
+// ---- inspector (精簡為 6 項) ----
+const insMetrics = [
+  {key:'weight', label:'體重', unit:'kg'},
+  {key:'bodyFatPct', label:'體脂率', unit:'%'},
+  {key:'smm', label:'骨骼肌量', unit:'kg'},
+  {key:'bmi', label:'BMI', unit:''},
+  {key:'vfa', label:'VFA', unit:''},
+  {key:'health', label:'健康分數', unit:''},
+];
+function updateInspector(){
+  const r = raw[State.index];
+  const prev = raw[State.index-1] || null;
+  document.getElementById('insDate').textContent = r.date;
+  const badge = document.getElementById('insBadge');
+  if(State.locked){
+    badge.textContent = '已鎖定';
+    badge.className = 'ins-badge locked';
+  } else {
+    badge.textContent = State.hover ? '游標選取中' : '最新一筆';
+    badge.className = 'ins-badge' + (State.hover ? ' live' : '');
+  }
+  const html = insMetrics.map(m=>{
+    const v = r[m.key];
+    let deltaHTML = `<div class="ins-delta"></div>`;
+    if(prev && prev[m.key]!==null && v!==null){
+      const d = +(v - prev[m.key]).toFixed(2);
+      const sign = d>0 ? '+' : '';
+      const cls = d===0 ? '' : (d>0?'up':'down');
+      deltaHTML = `<div class="ins-delta ${cls}">較上次 ${sign}${d}</div>`;
+    }
+    return `<div class="ins-item">
+      <div class="ins-item-label">${m.label}</div>
+      <div class="ins-item-val">${fmt(v)}<span class="ins-unit">${m.unit}</span></div>
+      ${deltaHTML}
+    </div>`;
+  }).join('');
+  document.getElementById('insGrid').innerHTML = html;
+}
+
+function onDotClick(idx){
+  if(State.locked && State.index===idx){
+    State.locked = false;
+    State.hover = false;
+    State.index = raw.length-1;
+  } else {
+    State.locked = true;
+    State.hover = false;
+    State.index = idx;
+  }
+  syncAll();
+}
+
+function buildTimeline(){
+  const el = document.getElementById('insTimeline');
+  el.innerHTML = raw.map((r,i)=>{
+    const lbl = r.date.slice(5).replace('-','/');
+    return `<button class="ins-dot-btn" id="dotbtn-${i}" title="${r.date}">
+      <span class="ins-dot"></span>
+      <span class="ins-dot-label">${lbl}</span>
+    </button>`;
+  }).join('');
+  raw.forEach((r,i)=>{
+    document.getElementById('dotbtn-'+i).addEventListener('click', ()=>onDotClick(i));
+  });
+}
+function updateTimeline(){
+  raw.forEach((r,i)=>{
+    const btn = document.getElementById('dotbtn-'+i);
+    if(!btn) return;
+    btn.classList.remove('active','locked');
+    if(i===State.index){
+      btn.classList.add(State.locked ? 'locked' : 'active');
+    }
+  });
+}
+
+// ================= 分級長條圖（IMG_9070 / IMG_9073 風格） =================
+function buildZonedBar(id, zones, min, max){
+  const track = document.getElementById(id+'_track');
+  track.innerHTML = '';
+  zones.forEach(z=>{
+    const cappedTo = Math.min(z.to, max);
+    const cappedFrom = Math.max(z.from, min);
+    const topPct = (1-(cappedTo-min)/(max-min))*100;
+    const heightPct = (cappedTo-cappedFrom)/(max-min)*100;
+    const band = document.createElement('div');
+    band.className = 'zbar-band';
+    band.style.top = topPct+'%';
+    band.style.height = heightPct+'%';
+    band.style.background = z.color+'33';
+    track.appendChild(band);
+  });
+  const marker = document.createElement('div');
+  marker.className = 'zbar-marker';
+  marker.id = id+'_marker';
+  track.appendChild(marker);
+}
+function buildGradientBar(id, colorBottom, colorTop){
+  const track = document.getElementById(id+'_track');
+  track.innerHTML = '';
+  track.style.background = `linear-gradient(${colorTop}55, ${colorBottom}55)`;
+  const marker = document.createElement('div');
+  marker.className = 'zbar-marker';
+  marker.id = id+'_marker';
+  track.appendChild(marker);
+}
+function updateBarMarker(id, val, min, max){
+  const pct = Math.max(0, Math.min(1, (val-min)/(max-min)));
+  document.getElementById(id+'_marker').style.top = ((1-pct)*100)+'%';
+}
+function classifyZone(val, zones){
+  for(const z of zones){ if(val>=z.from && val<z.to) return z.label; }
+  return zones[zones.length-1].label;
+}
+
+const BODYFAT_ZONES = [
+  {from:0, to:10, label:'過低', color:COL_CAUTION},
+  {from:10, to:22, label:'運動', color:COL_ATHLETIC},
+  {from:22, to:34, label:'標準', color:COL_SAFE},
+  {from:34, to:40, label:'過高', color:COL_CAUTION},
+  {from:40, to:Infinity, label:'肥胖', color:COL_RISK},
+];
+const BMI_ZONES = [
+  {from:0, to:18.5, label:'過低', color:COL_CAUTION},
+  {from:18.5, to:24.5, label:'標準', color:COL_SAFE},
+  {from:24.5, to:29.9, label:'過高', color:COL_CAUTION},
+  {from:29.9, to:Infinity, label:'肥胖', color:COL_RISK},
+];
+const VFA_ZONES = [
+  {from:0, to:10.5, label:'低', color:COL_SAFE},
+  {from:10.5, to:15, label:'中等', color:COL_CAUTION},
+  {from:15, to:Infinity, label:'高', color:COL_RISK},
+];
+const WEIGHT_ZONES = [
+  {from:0, to:85, label:'過低', color:COL_CAUTION},
+  {from:85, to:113, label:'標準', color:COL_SAFE},
+  {from:113, to:200, label:'過高', color:COL_RISK},
+];
+const SMM_ZONES = [
+  {from:0, to:90, label:'過低', color:COL_CAUTION},
+  {from:90, to:110, label:'標準', color:COL_SAFE},
+  {from:110, to:180, label:'過高', color:COL_RISK},
+];
+const FAT_ZONES = [
+  {from:0, to:80, label:'過低', color:COL_CAUTION},
+  {from:80, to:120, label:'標準', color:COL_SAFE},
+  {from:120, to:400, label:'過高', color:COL_RISK},
+];
+
+buildZonedBar('bar-bmi', BMI_ZONES, 0, 35);
+buildZonedBar('bar-bodyfat', BODYFAT_ZONES, 0, 45);
+buildZonedBar('bar-vfa', VFA_ZONES, 0, 20);
+buildZonedBar('bar-weight', WEIGHT_ZONES, 0, 200);
+buildZonedBar('bar-smm', SMM_ZONES, 0, 180);
+buildZonedBar('bar-fat', FAT_ZONES, 0, 400);
+
+function setGradeChip(elId, text){
+  const el = document.getElementById(elId);
+  el.textContent = text;
+  el.className = 'zbar-grade ' + chipClass(text);
+}
+
+function updateSnapshot(){
+  const r = raw[State.index];
+  const prev = raw[State.index-1] || null;
+
+  document.getElementById('healthNum').textContent = fmt(r.health);
+  if(prev){
+    const d = +(r.health-prev.health).toFixed(1);
+    const sign = d>0?'+':'';
+    const el = document.getElementById('healthDelta');
+    el.textContent = `較上次 ${sign}${d}`;
+    el.style.color = d>0?COL_SAFE:(d<0?COL_RISK:inkSoft);
+  }
+
+  // 肥胖分析（採您提供的女性標準區間）
+  document.getElementById('bar-bodyfat_value').innerHTML = fmt(r.bodyFatPct)+'<span class="u">%</span>';
+  setGradeChip('bar-bodyfat_grade', classifyZone(r.bodyFatPct, BODYFAT_ZONES));
+  updateBarMarker('bar-bodyfat', r.bodyFatPct, 0, 45);
+
+  document.getElementById('bar-bmi_value').innerHTML = fmt(r.bmi)+'<span class="u"></span>';
+  setGradeChip('bar-bmi_grade', classifyZone(r.bmi, BMI_ZONES));
+  updateBarMarker('bar-bmi', r.bmi, 0, 35);
+
+  document.getElementById('bar-vfa_value').innerHTML = fmt(r.vfa)+'<span class="u"></span>';
+  setGradeChip('bar-vfa_grade', classifyZone(r.vfa, VFA_ZONES));
+  updateBarMarker('bar-vfa', r.vfa, 0, 20);
+
+  // 肌肉-脂肪分析
+  document.getElementById('bar-weight_value').innerHTML = fmt(r.weight)+'<span class="u">kg</span>';
+  setGradeChip('bar-weight_grade', classifyZone(r.weightPct, WEIGHT_ZONES));
+  updateBarMarker('bar-weight', r.weightPct, 0, 200);
+  document.getElementById('bar-weight_sub').textContent = `目標 ${fmt(r.targetWeight)}kg`;
+
+  document.getElementById('bar-smm_value').innerHTML = fmt(r.smm)+'<span class="u">kg</span>';
+  setGradeChip('bar-smm_grade', classifyZone(r.smmPct, SMM_ZONES));
+  updateBarMarker('bar-smm', r.smmPct, 0, 180);
+  document.getElementById('bar-smm_sub').textContent = `目標 ${fmt(r.targetSmm)}kg`;
+
+  document.getElementById('bar-fat_value').innerHTML = fmt(r.fatMass)+'<span class="u">kg</span>';
+  setGradeChip('bar-fat_grade', classifyZone(r.fatPct, FAT_ZONES));
+  updateBarMarker('bar-fat', r.fatPct, 0, 400);
+  document.getElementById('bar-fat_sub').textContent = `目標 ${fmt(r.targetFat)}kg`;
+}
+
+// ================= 詳細趨勢小卡（收合區塊內） =================
+const metricDefs = [
+  {g:'A', key:'weight', label:'體重', unit:'kg', color:'#4E7A63'},
+  {g:'A', key:'bmi', label:'BMI', unit:'', color:'#4E7A63'},
+  {g:'A', key:'bodyFatPct', label:'體脂肪率', unit:'%', color:'#4E7A63'},
+  {g:'A', key:'fatMass', label:'體脂肪量', unit:'kg', color:'#4E7A63'},
+  {g:'A', key:'smm', label:'骨骼肌量', unit:'kg', color:'#4E7A63'},
+  {g:'A', key:'muscleMass', label:'肌肉量', unit:'kg', color:'#4E7A63'},
+  {g:'A', key:'ffm', label:'去脂肪體重', unit:'kg', color:'#4E7A63'},
+  {g:'A', key:'health', label:'健康分數', unit:'', color:'#4E7A63'},
+  {g:'B', key:'tbw', label:'體內水分 TBW', unit:'L', color:'#3D6E8C'},
+  {g:'B', key:'icwL', label:'細胞內液 ICW', unit:'L', color:'#3D6E8C'},
+  {g:'B', key:'ecwL', label:'細胞外液 ECW', unit:'L', color:'#3D6E8C'},
+  {g:'B', key:'icwPct', label:'細胞內液比例', unit:'%', color:'#3D6E8C'},
+  {g:'B', key:'ecwPct', label:'細胞外液比例', unit:'%', color:'#3D6E8C'},
+  {g:'B', key:'ecwRatio', label:'ECW/TBW（計算值）', unit:'%', color:'#3D6E8C'},
+  {g:'B', key:'proteinKg', label:'蛋白質量', unit:'kg', color:'#3D6E8C'},
+  {g:'B', key:'proteinPct', label:'蛋白質比例', unit:'%', color:'#3D6E8C'},
+  {g:'B', key:'mineralKg', label:'礦物質量', unit:'kg', color:'#3D6E8C'},
+  {g:'B', key:'mineralPct', label:'礦物質比例', unit:'%', color:'#3D6E8C'},
+  {g:'C', key:'vfa', label:'內臟脂肪面積 VFA', unit:'', color:'#B8863C'},
+  {g:'C', key:'fmi', label:'脂肪量指數 FMI', unit:'kg/m²', color:'#B8863C'},
+  {g:'C', key:'smi', label:'骨骼肌質量指數 SMI', unit:'kg/m²', color:'#B8863C'},
+  {g:'C', key:'bmr', label:'基礎代謝率 BMR', unit:'kcal', color:'#B8863C'},
+  {g:'C', key:'tee', label:'總能量消耗 TEE', unit:'kcal', color:'#B8863C'},
+  {g:'D', key:'trunkLean', label:'軀幹瘦肉', unit:'kg', color:'#3F7D5C'},
+  {g:'D', key:'armLLean', label:'左上肢瘦肉', unit:'kg', color:'#3F7D5C'},
+  {g:'D', key:'armRLean', label:'右上肢瘦肉', unit:'kg', color:'#3F7D5C'},
+  {g:'D', key:'legLLean', label:'左下肢瘦肉', unit:'kg', color:'#3F7D5C'},
+  {g:'D', key:'legRLean', label:'右下肢瘦肉', unit:'kg', color:'#3F7D5C'},
+  {g:'E', key:'trunkFat', label:'軀幹脂肪', unit:'kg', color:'#A8553D'},
+  {g:'E', key:'armLFat', label:'左上肢脂肪', unit:'kg', color:'#A8553D'},
+  {g:'E', key:'armRFat', label:'右上肢脂肪', unit:'kg', color:'#A8553D'},
+  {g:'E', key:'legLFat', label:'左下肢脂肪', unit:'kg', color:'#A8553D'},
+  {g:'E', key:'legRFat', label:'右下肢脂肪', unit:'kg', color:'#A8553D'},
+  {g:'F', key:'targetWeight', label:'目標體重', unit:'kg', color:'#6B5B8C'},
+  {g:'F', key:'weightControl', label:'體重控制', unit:'kg', color:'#6B5B8C'},
+  {g:'F', key:'fatControl', label:'體脂肪控制', unit:'kg', color:'#6B5B8C'},
+  {g:'F', key:'muscleControl', label:'肌肉控制', unit:'kg', color:'#6B5B8C'},
+  {g:'G', key:'muscleQuality', label:'肌肉品質評分', unit:'', color:'#4A5A8C'},
+];
+
+let chartCount = 0;
+let miniValueRegistry = [];
+let seg0 = null;
+
+function buildDashboard(){
+  // 清除舊圖表實例與DOM內容，避免canvas重複使用衝突
+  allCharts.forEach(c=>{ try{ c.destroy(); }catch(e){} });
+  chartRegistry.length = 0;
+  allCharts.length = 0;
+  miniValueRegistry.length = 0;
+  chartCount = 0;
+  document.querySelectorAll('.minigrid').forEach(el=>el.innerHTML='');
+
+  const emptyState = document.getElementById('emptyState');
+  const mainContent = document.getElementById('mainContent');
+  const inspectorBar = document.getElementById('inspectorBar');
+
+  if(!raw || raw.length===0){
+    if(emptyState) emptyState.style.display = 'block';
+    if(mainContent) mainContent.style.display = 'none';
+    if(inspectorBar) inspectorBar.style.display = 'none';
+    const topbarSub = document.getElementById('topbarSub');
+    if(topbarSub) topbarSub.textContent = '尚未上傳資料';
+    return;
+  }
+  if(emptyState) emptyState.style.display = 'none';
+  if(mainContent) mainContent.style.display = 'block';
+  if(inspectorBar) inspectorBar.style.display = 'block';
+
+  labels = raw.map(r=>r.date.slice(2).replace(/-/g,'/'));
+  first = raw[0];
+  last = raw[raw.length-1];
+  seg0 = raw.find(r=>r.trunkLean!==null) || raw[0];
+  State.index = raw.length-1; State.hover=false; State.locked=false;
+  const topbarSub = document.getElementById('topbarSub');
+  if(topbarSub) topbarSub.textContent = `${raw.length} 次測量 · ${first.date} → ${last.date}`;
+
+  // 摘要依上傳資料即時產生
+  const callout = document.getElementById('callout');
+  if(callout) callout.textContent = buildCallout(first, last, raw);
+
+  // 缺分節數據的日期，依實際資料列出
+  const noteFor = (key) => {
+    const miss = raw.filter(r=>r[key]==null).map(r=>r.date.slice(5));
+    return miss.length ? `${miss.join('、')} 無分節數據` : '';
+  };
+  const segLeanNote = document.getElementById('segLeanNote');
+  if(segLeanNote) segLeanNote.textContent = noteFor('trunkLean');
+  const segFatNote = document.getElementById('segFatNote');
+  if(segFatNote) segFatNote.textContent = noteFor('trunkFat');
+  const rangeline = document.querySelector('.rangeline');
+  if(rangeline){
+    const months = Math.max(1, Math.round((new Date(last.date) - new Date(first.date)) / 2592000000));
+    rangeline.innerHTML = `起始 <b>${first.date}</b> → 最新 <b>${last.date}</b>（共 ${months} 個月，${raw.length} 筆記錄）`;
+  }
+
+  metricDefs.forEach(def=>{
+  const container = document.querySelector(`.minigrid[data-group="${def.g}"]`);
+  const vals = raw.map(r=>r[def.key]);
+  const validVals = vals.filter(v=>v!==null && v!==undefined);
+  const startV = validVals[0], curV = validVals[validVals.length-1];
+  const delta = +(curV - startV).toFixed(2);
+  const sign = delta>0?'+':'';
+
+  const card = document.createElement('div');
+  card.className = 'card';
+  const cid = 'c'+(chartCount++);
+  card.innerHTML = `
+    <div class="label">${def.label}</div>
+    <div class="valrow">
+      <span class="val" id="${cid}_val">${fmt(curV)}</span>
+      <span class="unit">${def.unit}</span>
+      <span class="delta" style="background:${def.color}22;color:${def.color}">${sign}${delta}</span>
+    </div>
+    <div class="card-date" id="${cid}_date">${last.date.slice(5).replace('-','/')}</div>
+    <canvas id="${cid}"></canvas>`;
+  container.appendChild(card);
+  miniValueRegistry.push({cid, key:def.key});
+
+  const miniChart = new Chart(document.getElementById(cid), {
+    type:'line',
+    data:{ labels, datasets:[{ data:vals, borderColor:def.color, backgroundColor:def.color+'22',
+      fill:true, tension:.35, spanGaps:true, pointRadius:0, borderWidth:2 }]},
+    options:{
+      responsive:true, maintainAspectRatio:true,
+      plugins:{legend:{display:false}, tooltip:{enabled:true}, crosshair:{enabled:true}},
+      scales:{ x:{display:false}, y:{display:false} },
+      elements:{point:{radius:0}}
+    }
+  });
+  chartRegistry.push(miniChart);
+  allCharts.push(miniChart);
+});
+  comboChart('heroWeight', [
+    {label:'體重 (kg)', data:raw.map(r=>r.weight), borderColor:'#4E7A63', backgroundColor:'#4E7A63', yAxisID:'y'},
+    {label:'體脂率 (%)', data:raw.map(r=>r.bodyFatPct), borderColor:'#A8553D', backgroundColor:'#A8553D', yAxisID:'y1'},
+  ], true);
+  comboChart('heroFatMuscle', [
+    {label:'脂肪量 (kg)', data:raw.map(r=>r.fatMass), borderColor:'#A8553D', backgroundColor:'#A8553D'},
+    {label:'骨骼肌量 (kg)', data:raw.map(r=>r.smm), borderColor:'#3F7D5C', backgroundColor:'#3F7D5C'},
+  ], false);
+
+  segRadar('segLeanBar', [
+    {label:'軀幹', key:'trunkLean', group:'trunk'},
+    {label:'右上肢', key:'armRLean', group:'upperLimb'},
+    {label:'右下肢', key:'legRLean', group:'lowerLimb'},
+    {label:'左下肢', key:'legLLean', group:'lowerLimb'},
+    {label:'左上肢', key:'armLLean', group:'upperLimb'}
+  ]);
+  segRadar('segFatBar', [
+    {label:'軀幹', key:'trunkFat', group:'trunk'},
+    {label:'右上肢', key:'armRFat', group:'upperLimb'},
+    {label:'右下肢', key:'legRFat', group:'lowerLimb'},
+    {label:'左下肢', key:'legLFat', group:'lowerLimb'},
+    {label:'左上肢', key:'armLFat', group:'upperLimb'}
+  ]);
+
+  gripBand('gripL','gripL','#4A5A8C');
+  gripBand('gripR','gripR','#4A5A8C');
+
+  let chipHTML = '<thead><tr><th>日期</th>' + chipRows.map(row=>`<th>${row.label}</th>`).join('') + '</tr></thead><tbody>';
+  raw.forEach(r=>{
+    chipHTML += `<tr><td>${r.date}</td>` + chipRows.map(row=>`<td><span class="chip ${chipClass(r[row.key])}">${r[row.key]}</span></td>`).join('') + '</tr>';
+  });
+  chipHTML += '</tbody>';
+  document.getElementById('chipTable').innerHTML = chipHTML;
+
+  let fthead = '<thead><tr>' + cols.map(c=>`<th>${c[1]}</th>`).join('') + '</tr></thead>';
+  let ftbody = '<tbody>' + raw.map(r=>'<tr>' + cols.map(c=>`<td>${fmt(r[c[0]])}</td>`).join('') + '</tr>').join('') + '</tbody>';
+  document.getElementById('fullTable').innerHTML = fthead + ftbody;
+
+    buildTimeline();
+    positionInspector();
+    updateInspector();
+    updateSnapshot();
+    updateTimeline();
+    updateMiniValues();
+  }
+
+function updateMiniValues(){
+  const r = raw[State.index];
+  const dateShort = r.date.slice(5).replace('-','/');
+  miniValueRegistry.forEach(m=>{
+    const v = r[m.key];
+    const valEl = document.getElementById(m.cid+'_val');
+    const dateEl = document.getElementById(m.cid+'_date');
+    if(valEl) valEl.textContent = fmt(v);
+    if(dateEl) dateEl.textContent = dateShort;
+  });
+}
+
+// ---- hero combo charts ----
+function comboChart(id, datasets, dualAxis){
+  const scales = dualAxis
+    ? { x:{grid:{color:grid}}, y:{position:'left', grid:{color:grid}}, y1:{position:'right', grid:{drawOnChartArea:false}} }
+    : { x:{grid:{color:grid}}, y:{grid:{color:grid}} };
+  const c = new Chart(document.getElementById(id), {
+    type:'line', data:{labels, datasets},
+    options:{ responsive:true, maintainAspectRatio:false, interaction:{mode:'index',intersect:false},
+      plugins:{legend:{position:'top', align:'end', labels:{boxWidth:10,boxHeight:10,padding:10}}, crosshair:{enabled:true}},
+      scales, elements:{point:{radius:3,hoverRadius:5}, line:{tension:.3}} }
+  });
+  chartRegistry.push(c);
+  allCharts.push(c);
+}
+
+
+// ---- segmental radar charts（比照 InBody「體型判定」五邊形雷達圖）----
+// 左右對稱的肢段（左/右上肢、左/右下肢）共用同一把尺（同一組的最小～最大值），
+// 這樣相同公斤數的左手跟右手會落在同一個百分比位置，才能看出左右是否對稱；
+// 軀幹則單獨用自己的範圍。每組都換算成 15-100 的範圍（保留 15% 下限，避免數值
+// 剛好卡到歷史最小值時整個縮到圓心、圖形變成尖刺狀）。不同軸/組之間仍不能直接
+// 比較絕對大小，實際公斤數請看提示框。
+// 所有日期都畫成一條資料集，預設只顯示最舊與最新，其餘先隱藏（圖例文字會顯示
+// 槓掉的樣式）；點圖例上的任一日期即可切換該日期的顯示/隱藏。
+function hexToRgb(hex){
+  hex = hex.replace('#','');
+  return { r: parseInt(hex.substring(0,2),16), g: parseInt(hex.substring(2,4),16), b: parseInt(hex.substring(4,6),16) };
+}
+function lerpColor(hexA, hexB, t){
+  const a = hexToRgb(hexA), b = hexToRgb(hexB);
+  return {
+    r: Math.round(a.r+(b.r-a.r)*t),
+    g: Math.round(a.g+(b.g-a.g)*t),
+    b: Math.round(a.b+(b.b-a.b)*t)
+  };
+}
+const RADAR_PALETTE = ['#E63946','#F4A261','#2A9D8F','#457B9D','#8338EC','#FB8500','#06A77D','#D62839','#6A4C93','#118AB2'];
+
+function segRadar(id, parts){
+  const validRows = raw.filter(r=> r[parts[0].key]!=null);
+  const FLOOR = 15;
+
+  // 依 group 分組，收集該組所有肢段在所有日期出現過的數值，算出共用的最小/最大
+  const groupVals = {};
+  parts.forEach(p=>{ if(!groupVals[p.group]) groupVals[p.group] = []; });
+  validRows.forEach(r=>{
+    parts.forEach(p=>{
+      const v = r[p.key];
+      if(v!=null) groupVals[p.group].push(v);
+    });
+  });
+  const groupRange = {};
+  Object.keys(groupVals).forEach(g=>{
+    const vals = groupVals[g];
+    groupRange[g] = { mn: Math.min(...vals), mx: Math.max(...vals) };
+  });
+
+  function normalize(r){
+    return parts.map(p=>{
+      const v = r[p.key];
+      if(v==null) return null;
+      const {mn, mx} = groupRange[p.group];
+      if(mx===mn) return (FLOOR+100)/2;
+      const pct = (v-mn)/(mx-mn);
+      return +(FLOOR + pct*(100-FLOOR)).toFixed(1);
+    });
+  }
+
+  const datasets = validRows.map((r,i)=>{
+    const hex = RADAR_PALETTE[i % RADAR_PALETTE.length];
+    const c = hexToRgb(hex);
+    const isEdge = (i===0 || i===validRows.length-1);
+    return {
+      label: r.date,
+      data: normalize(r),
+      rawKg: parts.map(p=> r[p.key]),
+      borderColor: `rgb(${c.r},${c.g},${c.b})`,
+      backgroundColor: `rgba(${c.r},${c.g},${c.b},0.08)`,
+      pointBackgroundColor: `rgb(${c.r},${c.g},${c.b})`,
+      pointBorderColor: '#fff',
+      pointRadius: 4,
+      pointHoverRadius: 6,
+      borderWidth: 3,
+      hidden: !isEdge,
+    };
+  });
+
+  const c = new Chart(document.getElementById(id), {
+    type:'radar',
+    data:{ labels: parts.map(p=>p.label), datasets },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top', align:'start', labels:{boxWidth:10,boxHeight:10, font:{size:10}}},
+        crosshair:{enabled:false},
+        tooltip:{ callbacks:{ label:function(ctx){
+          const kg = ctx.dataset.rawKg[ctx.dataIndex];
+          return `${ctx.dataset.label}: ${kg!=null?kg.toFixed(1):'—'}kg`;
+        } } }
+      },
+      scales:{ r:{
+        min:0, max:100,
+        grid:{color:grid},
+        angleLines:{color:grid},
+        pointLabels:{color:inkSoft, font:{size:11}},
+        ticks:{display:false}
+      } }
+    }
+  });
+  allCharts.push(c);
+}
+
+
+// ---- grip strength band charts ----
+function gripBand(id, key, color){
+  const c = new Chart(document.getElementById(id), {
+    type:'line',
+    data:{ labels, datasets:[
+      {label:'上限', data:raw.map(r=>r[key][1]), borderColor:color, backgroundColor:color+'22', fill:'+1', pointRadius:2, tension:.3},
+      {label:'下限', data:raw.map(r=>r[key][0]), borderColor:color, backgroundColor:'transparent', fill:false, pointRadius:2, tension:.3, borderDash:[3,3]},
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'top', align:'end', labels:{boxWidth:10,boxHeight:10}}, crosshair:{enabled:true}},
+      scales:{ x:{grid:{color:grid}}, y:{grid:{color:grid}, title:{display:true,text:'kgf'}} } }
+  });
+  chartRegistry.push(c);
+  allCharts.push(c);
+}
+
+
+// ---- chip timeline（列＝日期，欄＝指標） ----
+const chipRows = [
+  {label:'體重等級', key:'weightGrade'},
+  {label:'體脂肪率等級', key:'bodyFatPctGrade'},
+  {label:'BMI等級', key:'bmiGrade'},
+  {label:'VFA等級', key:'vfaGrade'},
+  {label:'骨骼肌等級', key:'smmGrade'},
+  {label:'體型判定', key:'bodyType'},
+];
+
+
+// ---- full data table ----
+const cols = [
+  ['date','日期'],['weight','體重kg'],['bmi','BMI'],['bodyFatPct','體脂%'],['fatMass','脂肪kg'],
+  ['smm','骨骼肌kg'],['muscleMass','肌肉量kg'],['ffm','去脂體重kg'],['health','健康分數'],
+  ['tbw','TBW L'],['icwL','ICW L'],['ecwL','ECW L'],['proteinKg','蛋白質kg'],['mineralKg','礦物質kg'],
+  ['vfa','VFA'],['fmi','FMI'],['smi','SMI'],['bmr','BMR'],['tee','TEE'],
+  ['targetWeight','目標體重'],['weightControl','體重控制'],['fatControl','體脂控制'],['muscleControl','肌肉控制'],
+  ['muscleQuality','肌肉品質'],
+];
+
+
+// ================= 版面定位與錨點導覽 =================
+function positionInspector(){
+  const topbarH = document.querySelector('.topbar').offsetHeight;
+  const inspectorBar = document.getElementById('inspectorBar');
+  inspectorBar.style.top = topbarH + 'px';
+  const totalStickyH = topbarH + inspectorBar.offsetHeight + 14;
+  document.querySelectorAll('section.snapshot, header.hero, details.section').forEach(el=>{
+    el.style.scrollMarginTop = totalStickyH + 'px';
+  });
+}
+window.addEventListener('resize', positionInspector);
+
+// details 展開時，裡面的圖表可能是在隱藏狀態下初始化的，尺寸會不正確，需要展開後強制resize
+document.querySelectorAll('details.section').forEach(d=>{
+  d.addEventListener('toggle', ()=>{
+    if(d.open){
+      requestAnimationFrame(()=>{
+        allCharts.forEach(c=>c.resize());
+        positionInspector();
+      });
+    }
+  });
+});
+
+document.querySelectorAll('nav.jump a[href^="#"]').forEach(a=>{
+  a.addEventListener('click', (e)=>{
+    const id = a.getAttribute('href').slice(1);
+    const target = document.getElementById(id);
+    if(target && target.tagName === 'DETAILS' && !target.open){
+      target.open = true;
+    }
+  });
+});
+
+// 初始化
+buildDashboard();
+
+// ================= 上傳新數據（CSV / Excel）=================
+// 欄位對應：CSV原始欄名 -> 內部使用的key
+const COLUMN_MAP = [
+  ['測量日期','date'],
+  ['細胞內液(%)','icwPct'], ['細胞外液(%)','ecwPct'], ['蛋白質(%)','proteinPct'], ['礦物量(%)','mineralPct'],
+  ['體脂肪率(%)','bodyFatPct'], ['體脂肪率等級','bodyFatPctGrade'],
+  ['細胞內液(L)','icwL'], ['細胞外液(L)','ecwL'], ['蛋白質(kg)','proteinKg'], ['礦物量(kg)','mineralKg'],
+  ['體脂肪量(kg)','fatMass'],
+  ['體內水分(L)','tbw'], ['肌肉量(kg)','muscleMass'], ['去脂肪體重(kg)','ffm'],
+  ['體重(kg)','weight'], ['體重等級','weightGrade'], ['健康分數','health'],
+  ['骨骼肌量(kg)','smm'], ['骨骼肌等級','smmGrade'], ['體型判定','bodyType'],
+  ['BMI','bmi'], ['BMI等級','bmiGrade'], ['VFA','vfa'], ['VFA等級','vfaGrade'],
+  ['基礎代謝率(kcal)','bmr'], ['總能量消耗(kcal)','tee'],
+  ['脂肪量指數(kg/m²)','fmi'], ['骨骼肌質量指數(kg/m²)','smi'],
+  ['目標體重(kg)','targetWeight'], ['體重控制(kg)','weightControl'], ['體脂肪控制(kg)','fatControl'], ['肌肉控制(kg)','muscleControl'],
+  ['軀幹瘦肉(kg)','trunkLean'], ['左上肢瘦肉(kg)','armLLean'], ['右上肢瘦肉(kg)','armRLean'], ['左下肢瘦肉(kg)','legLLean'], ['右下肢瘦肉(kg)','legRLean'],
+  ['軀幹脂肪(kg)','trunkFat'], ['左上肢脂肪(kg)','armLFat'], ['右上肢脂肪(kg)','armRFat'], ['左下肢脂肪(kg)','legLFat'], ['右下肢脂肪(kg)','legRFat'],
+  ['肌肉品質評分','muscleQuality'],
+  ['左手握力(kgf)','gripLraw'], ['右手握力(kgf)','gripRraw'],
+];
+const STRING_KEYS = ['date','bodyFatPctGrade','weightGrade','smmGrade','bodyType','bmiGrade','vfaGrade'];
+
+function normalizeDate(v){
+  if(v===null || v===undefined) return '';
+  v = String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  if(/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(v)){
+    const [y,m,d] = v.split('/');
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  if(/^\d+(\.\d+)?$/.test(v)){
+    const serial = parseFloat(v);
+    if(serial>20000 && serial<60000){
+      const d = new Date(Math.round((serial-25569)*86400*1000));
+      if(!isNaN(d)) return d.toISOString().slice(0,10);
+    }
+  }
+  const d = new Date(v);
+  if(!isNaN(d)) return d.toISOString().slice(0,10);
+  return v;
+}
+
+function parseRow(headerMap, valuesArr){
+  const obj = {};
+  COLUMN_MAP.forEach(([csvName,key])=>{
+    const idx = headerMap[csvName];
+    if(idx===undefined) return;
+    let v = valuesArr[idx];
+    if(v===undefined || v===null) v = '';
+    v = String(v).trim();
+    if(key==='gripLraw' || key==='gripRraw'){
+      const parts = v.split('-').map(s=>parseFloat(s));
+      const target = key==='gripLraw' ? 'gripL' : 'gripR';
+      obj[target] = (parts.length===2 && !parts.some(isNaN)) ? parts : [0,0];
+    } else if(key==='date'){
+      obj.date = normalizeDate(v);
+    } else if(STRING_KEYS.includes(key)){
+      obj[key] = v;
+    } else {
+      const num = parseFloat(v);
+      obj[key] = (v==='' || isNaN(num)) ? null : num;
+    }
+  });
+  return obj;
+}
+
+function rowsFromAOA(aoa){
+  if(!aoa || aoa.length<2) return [];
+  const header = aoa[0].map(h=>String(h==null?'':h).trim());
+  const headerMap = {};
+  header.forEach((h,i)=>{ if(h) headerMap[h]=i; });
+  const rows = [];
+  for(let i=1;i<aoa.length;i++){
+    const line = aoa[i];
+    if(!line || line.length===0) continue;
+    if(line.every(v=>v===undefined || v===null || String(v).trim()==='')) continue;
+    const obj = parseRow(headerMap, line);
+    if(!obj.date) continue;
+    rows.push(obj);
+  }
+  rows.sort((a,b)=> a.date < b.date ? -1 : (a.date>b.date ? 1 : 0));
+  computeDerived(rows);
+  return rows;
+}
+
+function csvTextToAOA(text){
+  return text.split(/\r?\n/).filter(l=>l.trim()!=='').map(line=>line.split(','));
+}
+
+const fileInputEl = document.getElementById('fileInput');
+const uploadStatusEl = document.getElementById('uploadStatus');
+if(fileInputEl){
+  fileInputEl.addEventListener('change', function(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const isExcel = /\.xlsx$|\.xls$/i.test(file.name);
+    const reader = new FileReader();
+    reader.onload = function(evt){
+      try{
+        let aoa;
+        if(isExcel){
+          const data = new Uint8Array(evt.target.result);
+          const wb = XLSX.read(data, {type:'array'});
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          aoa = XLSX.utils.sheet_to_json(sheet, {header:1, raw:false, defval:''});
+        } else {
+          aoa = csvTextToAOA(evt.target.result);
+        }
+        const rows = rowsFromAOA(aoa);
+        if(!rows.length){
+          uploadStatusEl.textContent = '沒有讀到有效資料列，請確認欄位名稱與原始 InBody 匯出格式一致';
+          uploadStatusEl.className = 'upload-status error';
+          return;
+        }
+        raw = rows;
+        buildDashboard();
+        uploadStatusEl.textContent = `已載入 ${rows.length} 筆（${rows[0].date} → ${rows[rows.length-1].date}）`;
+        uploadStatusEl.className = 'upload-status success';
+      }catch(err){
+        console.error(err);
+        uploadStatusEl.textContent = '解析失敗：'+err.message;
+        uploadStatusEl.className = 'upload-status error';
+      }
+    };
+    if(isExcel) reader.readAsArrayBuffer(file); else reader.readAsText(file);
+    fileInputEl.value = '';
+  });
+}
+</script>
+</body>
+</html>

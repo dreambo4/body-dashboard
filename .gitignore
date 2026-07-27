@@ -1,0 +1,22 @@
+node_modules/
+dist/
+
+# Vite build 產物（由 npm run build 產生，不進版控）
+public/daily/
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# 系統與編輯器
+.DS_Store
+*.local
+.vscode/
+.idea/
+
+# 環境變數
+.env
+.env.*
+!.env.example
